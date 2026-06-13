@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
 
 function App() {
-  // Roster Data States
   const [players, setPlayers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Form Input States
   const [formData, setFormData] = useState({
     name: "",
     position: "",
@@ -14,7 +12,6 @@ function App() {
   });
   const [formError, setFormError] = useState(null);
 
-  // Fetch the roster when the component mounts
   useEffect(() => {
     fetchRoster();
   }, []);
@@ -22,9 +19,8 @@ function App() {
   const fetchRoster = async () => {
     try {
       const response = await fetch("http://localhost:8080/api/players");
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error("Could not connect to the backend server.");
-      }
       const data = await response.json();
       setPlayers(data);
       setIsLoading(false);
@@ -34,21 +30,15 @@ function App() {
     }
   };
 
-  // Handle keystrokes in the input fields
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Submit the form data to the Java Server
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setFormError(null);
 
-    // Basic Validation
     if (!formData.name || !formData.position || !formData.jerseyNumber) {
       setFormError("All fields are mandatory.");
       return;
@@ -57,9 +47,7 @@ function App() {
     try {
       const response = await fetch("http://localhost:8080/api/players", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.name,
           position: formData.position,
@@ -67,26 +55,39 @@ function App() {
         }),
       });
 
-      if (!response.ok) {
+      if (!response.ok)
         throw new Error("Backend failed to process the player entry.");
-      }
 
       const newPlayer = await response.json();
-
-      // Update the local state with the newly created player instantly
       setPlayers((prevPlayers) => [...prevPlayers, newPlayer]);
-
-      // Reset the form fields cleanly
       setFormData({ name: "", position: "", jerseyNumber: "" });
     } catch (err) {
       setFormError(err.message);
     }
   };
 
+  // NEW: The Delete Function
+  const handleDelete = async (id) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/players/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok)
+        throw new Error("Failed to delete player from the server.");
+
+      // Instantly remove the player from the UI by filtering them out of the current state
+      setPlayers((prevPlayers) =>
+        prevPlayers.filter((player) => player.id !== id)
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <div className="min-h-screen p-8 bg-white text-black">
       <div className="max-w-5xl mx-auto">
-        {/* Main Header */}
         <div className="mb-8 border-b-4 border-black pb-4 flex justify-between items-end">
           <h1 className="text-4xl font-bold uppercase tracking-widest">
             Roster Manager
@@ -96,20 +97,18 @@ function App() {
           </p>
         </div>
 
-        {/* Error Notification Block */}
         {error && (
           <div className="mb-6 p-4 border-2 border-black bg-black text-white font-bold">
-            CRITICAL ERROR: {error}
+            ERROR: {error}
           </div>
         )}
 
         <div className="space-y-10">
-          {/* Player Creation Form Card */}
+          {/* Add Player Form */}
           <div className="border-2 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] bg-white">
             <h2 className="text-2xl font-bold uppercase tracking-wider mb-4">
               Add New Player
             </h2>
-
             {formError && (
               <p className="mb-4 text-sm font-bold uppercase tracking-tight text-red-600">
                 {formError}
@@ -133,7 +132,6 @@ function App() {
                   placeholder="e.g. Stephen Curry"
                 />
               </div>
-
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider mb-1">
                   Position
@@ -147,7 +145,6 @@ function App() {
                   placeholder="e.g. Guard"
                 />
               </div>
-
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider mb-1">
                   Jersey Number
@@ -161,7 +158,6 @@ function App() {
                   placeholder="e.g. 30"
                 />
               </div>
-
               <div className="md:col-span-3 mt-2">
                 <button
                   type="submit"
@@ -173,12 +169,11 @@ function App() {
             </form>
           </div>
 
-          {/* Roster Display Section */}
+          {/* Roster Display Table */}
           <div>
             <h2 className="text-2xl font-bold uppercase tracking-wider mb-4">
               Current Roster
             </h2>
-
             {isLoading ? (
               <p className="text-lg font-medium animate-pulse">
                 Loading secure roster stream...
@@ -188,13 +183,17 @@ function App() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-black text-white uppercase text-xs tracking-widest">
-                      <th className="p-4 border-b-2 border-black w-20">ID</th>
+                      <th className="p-4 border-b-2 border-black w-16">ID</th>
                       <th className="p-4 border-b-2 border-black">
                         Player Name
                       </th>
                       <th className="p-4 border-b-2 border-black">Position</th>
-                      <th className="p-4 border-b-2 border-black w-32">
+                      <th className="p-4 border-b-2 border-black w-24">
                         Jersey #
+                      </th>
+                      {/* NEW: Actions Column Header */}
+                      <th className="p-4 border-b-2 border-black w-32 text-right">
+                        Actions
                       </th>
                     </tr>
                   </thead>
@@ -202,7 +201,7 @@ function App() {
                     {players.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="4"
+                          colSpan="5"
                           className="p-12 text-center text-lg font-medium border-b-2 border-black text-gray-500"
                         >
                           The roster is completely empty. Use the form above to
@@ -213,7 +212,7 @@ function App() {
                       players.map((player) => (
                         <tr
                           key={player.id}
-                          className="hover:bg-gray-50 transition-colors"
+                          className="hover:bg-gray-50 transition-colors group"
                         >
                           <td className="p-4 border-b-2 border-black font-bold">
                             {player.id}
@@ -226,6 +225,15 @@ function App() {
                           </td>
                           <td className="p-4 border-b-2 border-black font-bold">
                             {player.jerseyNumber}
+                          </td>
+                          {/* NEW: Delete Button Cell */}
+                          <td className="p-4 border-b-2 border-black text-right">
+                            <button
+                              onClick={() => handleDelete(player.id)}
+                              className="text-xs font-bold uppercase tracking-wider text-red-600 hover:text-white hover:bg-red-600 border-2 border-transparent hover:border-red-600 px-3 py-1 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            >
+                              Remove
+                            </button>
                           </td>
                         </tr>
                       ))

@@ -12,6 +12,9 @@ function App() {
   });
   const [formError, setFormError] = useState(null);
 
+  // NEW: State to track if we are currently editing a player
+  const [editingId, setEditingId] = useState(null);
+
   useEffect(() => {
     fetchRoster();
   }, []);
@@ -35,6 +38,25 @@ function App() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // NEW: Function to load a player's data into the form
+  const handleEditClick = (player) => {
+    setFormData({
+      name: player.name,
+      position: player.position,
+      jerseyNumber: player.jerseyNumber.toString(),
+    });
+    setEditingId(player.id);
+    setFormError(null);
+    window.scrollTo({ top: 0, behavior: "smooth" }); // Scroll to form
+  };
+
+  // NEW: Function to cancel an edit
+  const cancelEdit = () => {
+    setFormData({ name: "", position: "", jerseyNumber: "" });
+    setEditingId(null);
+    setFormError(null);
+  };
+
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setFormError(null);
@@ -45,8 +67,14 @@ function App() {
     }
 
     try {
-      const response = await fetch("http://localhost:8080/api/players", {
-        method: "POST",
+      // Check if we are updating (PUT) or creating (POST)
+      const isUpdating = editingId !== null;
+      const url = isUpdating
+        ? `http://localhost:8080/api/players/${editingId}`
+        : "http://localhost:8080/api/players";
+
+      const response = await fetch(url, {
+        method: isUpdating ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.name,
@@ -56,30 +84,43 @@ function App() {
       });
 
       if (!response.ok)
-        throw new Error("Backend failed to process the player entry.");
+        throw new Error(
+          `Backend failed to ${isUpdating ? "update" : "create"} the player.`
+        );
 
-      const newPlayer = await response.json();
-      setPlayers((prevPlayers) => [...prevPlayers, newPlayer]);
+      const savedPlayer = await response.json();
+
+      if (isUpdating) {
+        // Find the old player in the array and replace them with the newly updated one
+        setPlayers((prevPlayers) =>
+          prevPlayers.map((p) => (p.id === editingId ? savedPlayer : p))
+        );
+        setEditingId(null);
+      } else {
+        // Add the new player to the end of the array
+        setPlayers((prevPlayers) => [...prevPlayers, savedPlayer]);
+      }
+
+      // Clean up the form
       setFormData({ name: "", position: "", jerseyNumber: "" });
     } catch (err) {
       setFormError(err.message);
     }
   };
 
-  // NEW: The Delete Function
   const handleDelete = async (id) => {
     try {
       const response = await fetch(`http://localhost:8080/api/players/${id}`, {
         method: "DELETE",
       });
-
       if (!response.ok)
         throw new Error("Failed to delete player from the server.");
-
-      // Instantly remove the player from the UI by filtering them out of the current state
       setPlayers((prevPlayers) =>
         prevPlayers.filter((player) => player.id !== id)
       );
+
+      // If we delete the player we are currently editing, reset the form
+      if (editingId === id) cancelEdit();
     } catch (err) {
       setError(err.message);
     }
@@ -104,10 +145,10 @@ function App() {
         )}
 
         <div className="space-y-10">
-          {/* Add Player Form */}
-          <div className="border-2 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] bg-white">
+          {/* Add/Edit Player Form */}
+          <div className="border-2 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] bg-white transition-all">
             <h2 className="text-2xl font-bold uppercase tracking-wider mb-4">
-              Add New Player
+              {editingId ? "Edit Player Details" : "Add New Player"}
             </h2>
             {formError && (
               <p className="mb-4 text-sm font-bold uppercase tracking-tight text-red-600">
@@ -158,13 +199,23 @@ function App() {
                   placeholder="e.g. 30"
                 />
               </div>
-              <div className="md:col-span-3 mt-2">
+
+              <div className="md:col-span-3 mt-2 flex gap-4">
                 <button
                   type="submit"
-                  className="w-full md:w-auto bg-black text-white hover:bg-gray-800 font-bold uppercase tracking-widest text-sm py-3 px-8 transition-colors border-2 border-black active:bg-white active:text-black"
+                  className="flex-1 md:flex-none bg-black text-white hover:bg-gray-800 font-bold uppercase tracking-widest text-sm py-3 px-8 transition-colors border-2 border-black active:bg-white active:text-black"
                 >
-                  Add Player to Roster
+                  {editingId ? "Save Changes" : "Add Player to Roster"}
                 </button>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="flex-1 md:flex-none bg-white text-black hover:bg-gray-200 font-bold uppercase tracking-widest text-sm py-3 px-8 transition-colors border-2 border-black"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
             </form>
           </div>
@@ -191,8 +242,7 @@ function App() {
                       <th className="p-4 border-b-2 border-black w-24">
                         Jersey #
                       </th>
-                      {/* NEW: Actions Column Header */}
-                      <th className="p-4 border-b-2 border-black w-32 text-right">
+                      <th className="p-4 border-b-2 border-black w-48 text-right">
                         Actions
                       </th>
                     </tr>
@@ -212,7 +262,9 @@ function App() {
                       players.map((player) => (
                         <tr
                           key={player.id}
-                          className="hover:bg-gray-50 transition-colors group"
+                          className={`hover:bg-gray-50 transition-colors group ${
+                            editingId === player.id ? "bg-gray-100" : ""
+                          }`}
                         >
                           <td className="p-4 border-b-2 border-black font-bold">
                             {player.id}
@@ -226,8 +278,13 @@ function App() {
                           <td className="p-4 border-b-2 border-black font-bold">
                             {player.jerseyNumber}
                           </td>
-                          {/* NEW: Delete Button Cell */}
-                          <td className="p-4 border-b-2 border-black text-right">
+                          <td className="p-4 border-b-2 border-black text-right space-x-2">
+                            <button
+                              onClick={() => handleEditClick(player)}
+                              className="text-xs font-bold uppercase tracking-wider text-black hover:text-white hover:bg-black border-2 border-transparent hover:border-black px-3 py-1 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            >
+                              Edit
+                            </button>
                             <button
                               onClick={() => handleDelete(player.id)}
                               className="text-xs font-bold uppercase tracking-wider text-red-600 hover:text-white hover:bg-red-600 border-2 border-transparent hover:border-red-600 px-3 py-1 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
